@@ -1,0 +1,79 @@
+#!/usr/bin/env bash
+
+CONFIG="/etc/restic/config.env"
+
+echo "Started: $(date)"
+
+if [ $# == 0 ]; then
+	. $CONFIG
+else
+	. $1
+fi
+
+RESTIC_BACKUP="$RESTIC_BIN backup $RESTIC_ARGS $RESTIC_BACKUP_ARGS"
+RESTIC_DIFF="$RESTIC_BIN diff $RESTIC_ARGS $RESTIC_DIFF_ARGS"
+RESTIC_FORGET="$RESTIC_BIN forget $RESTIC_ARGS $RESTIC_FORGET_ARGS"
+
+EXITCODE=0
+FAIL_BACKUP=1
+FAIL_REPORT=2
+FAIL_CLEANUP=4
+
+# Backup
+if [[ -z $BACKUP ]] || [[ -n $BACKUP && $BACKUP != 0 ]]; then
+	EXPIRE=$(( SECONDS + LOCK_WAIT - LOCK_DELAY ))
+	
+	eval $RESTIC_BACKUP 2>&1
+	until [[ $? == 0 ]] || [[ $EXPIRE -le $SECONDS ]]; do
+		echo "Waiting for lock."
+		sleep $LOCK_DELAY
+		eval $RESTIC_BACKUP 2>&1
+	done
+	
+	if [[ $? != 0 ]]; then
+		echo "Backup failed" >&2
+		EXITCODE=$(( EXITCODE | FAIL_BACKUP ))
+		exit $EXITCODE
+	fi
+fi
+
+# Report
+# Reporting isn't considered a priority, so failures are ignored.
+if [[ -n $REPORT && $REPORT != 0 ]]; then
+	SNAPSHOTS=$(eval $RESTIC_BIN snapshots $RESTIC_ARGS --json | jq --raw-output '.[-2:] | .[] | .short_id') 2>&1
+	SNAPSHOTS=( $SNAPSHOTS )
+	RESTIC_DIFF="$RESTIC_DIFF ${SNAPSHOTS[@]}"
+
+	if [[ -n $REPORT_PIPE ]]; then
+		{ eval $RESTIC_DIFF | eval $REPORT_PIPE; } 2>&1
+	else
+		eval $RESTIC_DIFF 2>&1
+	fi
+fi
+
+# Cleanup
+if [[ -n $CLEANUP && $CLEANUP != 0 ]]; then
+	EXPIRE=$(( SECONDS + LOCK_WAIT - LOCK_DELAY ))
+
+	eval $RESTIC_FORGET 2>&1
+	until [[ $? == 0 ]] || [[ $EXPIRE -le $SECONDS ]]; do
+		echo "Waiting for lock."
+		sleep $LOCK_DELAY
+		eval $RESTIC_FORGET 2>&1
+	done
+
+	if [[ $? != 0 ]]; then
+		echo "Cleanup failed" >&2
+		EXITCODE=$(( EXITCODE | FAIL_CLEANUP ))
+	fi
+fi
+
+# Backup performance summary
+WALLTIME=$SECONDS
+WALLTIME_MIN=$(($WALLTIME/60))
+WALLTIME_HOUR=$(($WALLTIME_MIN/60))
+echo "Wall time (h:m:s): $(($WALLTIME_HOUR)):$(printf %02d $(($WALLTIME_MIN%60))):$(printf %02d $(($WALLTIME%60)))"
+echo -e "times:\n$(times | sed -e 's/^/\t/')"
+echo "Finished: $(date)"
+
+exit $EXITCODE
