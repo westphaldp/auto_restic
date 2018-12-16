@@ -1,17 +1,17 @@
-# auto restic
+# auto_restic
 
-=auto restic= is a wrapper script for [restic](https://github.com/restic/restic), much like [restic runner](https://github.com/alphapapa/restic-runner), but allowing all operations and configurations to be implemented in configuration files. It was designed to enable easy cron folder drop-ins, it should also work well with SystemD unit templates.
+`auto_restic` is a wrapper script for [restic](https://github.com/restic/restic), much like [restic-runner](https://github.com/alphapapa/restic-runner), but allowing all operations and configurations to be implemented in configuration files. Though it was designed to enable easy cron folder drop-ins, it should also work well with SystemD unit templates and timers.
 
 ## Installation
 
 1. Install `restic`. If reports are desired, also install `jq`.
 1. Copy `auto_restic` and `config.env` to the desired locations.
 1. Customize the configuration file as desired.
-1. Optinally, update the `CONFIG` variable in `auto_restic` to allow easy use.
+1. Optionally, update the `CONFIG` variable in `auto_restic` to allow easier use.
 
 ## Usage
 
-First, you'll need to initialize the repository. e.g.
+First, initialize the repository. e.g.
 
 	bash -c '. /etc/restic/config.env; restic init;'
 
